@@ -15,19 +15,19 @@
  * limitations under the License.
  */
 
+// scalastyle:off line.size.limit
 package org.apache.spark.sql.kafka010.sharegroup
 
 import java.{util => ju}
 
-import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
-import org.apache.spark.internal.Logging
-import org.apache.spark.internal.MDC
-import org.apache.spark.internal.LogKeys._
 import org.apache.spark.SparkException
+import org.apache.spark.internal.Logging
+import org.apache.spark.internal.LogKeys._
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReaderFactory}
 import org.apache.spark.sql.connector.read.streaming.{MicroBatchStream, Offset, ReadLimit}
+import org.apache.spark.sql.kafka010.KafkaSourceProvider.INCLUDE_HEADERS
 import org.apache.spark.sql.kafka010.sharegroup.ShareGroupKafkaConfig._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
@@ -73,8 +73,8 @@ private[kafka010] class TransactionalShareGroupMicroBatchStream(
       logWarning(s"Lock duration ($recordLockDurationMs ms) < session timeout ($sessionTimeoutMs ms)")
     }
 
-    logInfo(log"Configured: shareGroup=${MDC(GROUP_ID, shareGroupId)}, topics=${topics.mkString(",")}, " +
-      log"ackMode=$acknowledgementMode, parallelism=$numPartitions")
+    logInfo(log"Configured: shareGroup=${MDC(GROUP_ID, shareGroupId)}, " +
+      s"topics=${topics.mkString(",")}, ackMode=$acknowledgementMode, parallelism=$numPartitions")
   }
 
   override def initialOffset(): Offset = {
@@ -106,7 +106,7 @@ private[kafka010] class TransactionalShareGroupMicroBatchStream(
         transactionCoordinator.cleanupOldTransactions(3600000L)
       }
 
-      logInfo(log"Batch committed. Stats: ${transactionCoordinator.getStatistics}")
+      logInfo(log"Batch committed. Stats: " + s"${transactionCoordinator.getStatistics}")
     } catch {
       case NonFatal(e) =>
         logError(log"Commit failed", e)
@@ -119,7 +119,7 @@ private[kafka010] class TransactionalShareGroupMicroBatchStream(
 
   override def stop(): Unit = {
     try {
-      logInfo(log"Stopping stream. Stats: ${transactionCoordinator.getStatistics}")
+      logInfo(log"Stopping stream. Stats: " + s"${transactionCoordinator.getStatistics}")
       transactionCoordinator.close()
     } catch { case NonFatal(e) => logError("Error stopping", e) }
   }
@@ -210,7 +210,8 @@ object ShareGroupBatchProgress {
       val batchNumber = (parsed \ "batchNumber").extract[Long]
 
       val metadataMap = try {
-        (parsed \ "transactionMetadata").extractOpt[Map[String, Map[String, Any]]].getOrElse(Map.empty)
+        (parsed \ "transactionMetadata").toOption.map(_.extract[Map[String, Map[String, Any]]])
+          .getOrElse(Map.empty)
       } catch { case _: Exception => Map.empty[String, Map[String, Any]] }
 
       val transactionMetadata = metadataMap.map { case (batchId, meta) =>

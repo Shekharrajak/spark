@@ -354,6 +354,10 @@ private[kafka010] class KafkaSourceProvider extends DataSourceRegister
     params.get(ENDING_OFFSETS_BY_TIMESTAMP_OPTION_KEY).map(_ =>
       throw new IllegalArgumentException("ending timestamp not valid in streaming queries"))
 
+    // Validate share group options if enabled
+    import org.apache.spark.sql.kafka010.sharegroup.ShareGroupIntegration
+    ShareGroupIntegration.validateShareGroupOptions(params.asJava)
+
     validateGeneralOptions(params)
   }
 
@@ -481,61 +485,83 @@ private[kafka010] class KafkaSourceProvider extends DataSourceRegister
     override def toMicroBatchStream(checkpointLocation: String): MicroBatchStream = {
       val caseInsensitiveOptions = CaseInsensitiveMap(options.asScala.toMap)
       validateStreamOptions(caseInsensitiveOptions)
-      // Each running query should use its own group id. Otherwise, the query may be only assigned
-      // partial data since Kafka will assign partitions to multiple consumers having the same group
-      // id. Hence, we should generate a unique id for each query.
-      val uniqueGroupId = streamingUniqueGroupId(caseInsensitiveOptions, checkpointLocation)
 
-      val specifiedKafkaParams = convertToSpecifiedParams(caseInsensitiveOptions)
+      // Check if share groups are enabled
+      import org.apache.spark.sql.kafka010.sharegroup.ShareGroupIntegration
+      ShareGroupIntegration.createMicroBatchStream(options) match {
+        case Some(shareGroupStream) =>
+          // Share groups enabled - use share group implementation
+          shareGroupStream
+        case None =>
+          // Traditional consumer group implementation
+          // Each running query should use its own group id. Otherwise, the query may be
+          // only assigned partial data since Kafka will assign partitions to multiple
+          // consumers having the same group id. Hence, we should generate a unique id for
+          // each query.
+          val uniqueGroupId = streamingUniqueGroupId(caseInsensitiveOptions, checkpointLocation)
 
-      val startingStreamOffsets = KafkaSourceProvider.getKafkaOffsetRangeLimit(
-        caseInsensitiveOptions, STARTING_TIMESTAMP_OPTION_KEY,
-        STARTING_OFFSETS_BY_TIMESTAMP_OPTION_KEY, STARTING_OFFSETS_OPTION_KEY,
-        LatestOffsetRangeLimit)
+          val specifiedKafkaParams = convertToSpecifiedParams(caseInsensitiveOptions)
 
-      val kafkaOffsetReader = KafkaOffsetReader.build(
-        strategy(caseInsensitiveOptions),
-        kafkaParamsForDriver(specifiedKafkaParams),
-        caseInsensitiveOptions,
-        driverGroupIdPrefix = s"$uniqueGroupId-driver")
+          val startingStreamOffsets = KafkaSourceProvider.getKafkaOffsetRangeLimit(
+            caseInsensitiveOptions, STARTING_TIMESTAMP_OPTION_KEY,
+            STARTING_OFFSETS_BY_TIMESTAMP_OPTION_KEY, STARTING_OFFSETS_OPTION_KEY,
+            LatestOffsetRangeLimit)
 
-      new KafkaMicroBatchStream(
-        kafkaOffsetReader,
-        kafkaParamsForExecutors(specifiedKafkaParams, uniqueGroupId),
-        options,
-        checkpointLocation,
-        startingStreamOffsets,
-        failOnDataLoss(caseInsensitiveOptions))
+          val kafkaOffsetReader = KafkaOffsetReader.build(
+            strategy(caseInsensitiveOptions),
+            kafkaParamsForDriver(specifiedKafkaParams),
+            caseInsensitiveOptions,
+            driverGroupIdPrefix = s"$uniqueGroupId-driver")
+
+          new KafkaMicroBatchStream(
+            kafkaOffsetReader,
+            kafkaParamsForExecutors(specifiedKafkaParams, uniqueGroupId),
+            options,
+            checkpointLocation,
+            startingStreamOffsets,
+            failOnDataLoss(caseInsensitiveOptions))
+      }
     }
 
     override def toContinuousStream(checkpointLocation: String): ContinuousStream = {
       val caseInsensitiveOptions = CaseInsensitiveMap(options.asScala.toMap)
       validateStreamOptions(caseInsensitiveOptions)
-      // Each running query should use its own group id. Otherwise, the query may be only assigned
-      // partial data since Kafka will assign partitions to multiple consumers having the same group
-      // id. Hence, we should generate a unique id for each query.
-      val uniqueGroupId = streamingUniqueGroupId(caseInsensitiveOptions, checkpointLocation)
 
-      val specifiedKafkaParams = convertToSpecifiedParams(caseInsensitiveOptions)
+      // Check if share groups are enabled - they don't support continuous mode
+      import org.apache.spark.sql.kafka010.sharegroup.ShareGroupIntegration
+      ShareGroupIntegration.createContinuousStream(options) match {
+        case Some(_) =>
+          // This will throw UnsupportedOperationException
+          throw new UnsupportedOperationException("Should not reach here")
+        case None =>
+          // Traditional consumer group implementation
+          // Each running query should use its own group id. Otherwise, the query may be
+          // only assigned partial data since Kafka will assign partitions to multiple
+          // consumers having the same group id. Hence, we should generate a unique id for
+          // each query.
+          val uniqueGroupId = streamingUniqueGroupId(caseInsensitiveOptions, checkpointLocation)
 
-      val startingStreamOffsets = KafkaSourceProvider.getKafkaOffsetRangeLimit(
-        caseInsensitiveOptions, STARTING_TIMESTAMP_OPTION_KEY,
-        STARTING_OFFSETS_BY_TIMESTAMP_OPTION_KEY, STARTING_OFFSETS_OPTION_KEY,
-        LatestOffsetRangeLimit)
+          val specifiedKafkaParams = convertToSpecifiedParams(caseInsensitiveOptions)
 
-      val kafkaOffsetReader = KafkaOffsetReader.build(
-        strategy(caseInsensitiveOptions),
-        kafkaParamsForDriver(specifiedKafkaParams),
-        caseInsensitiveOptions,
-        driverGroupIdPrefix = s"$uniqueGroupId-driver")
+          val startingStreamOffsets = KafkaSourceProvider.getKafkaOffsetRangeLimit(
+            caseInsensitiveOptions, STARTING_TIMESTAMP_OPTION_KEY,
+            STARTING_OFFSETS_BY_TIMESTAMP_OPTION_KEY, STARTING_OFFSETS_OPTION_KEY,
+            LatestOffsetRangeLimit)
 
-      new KafkaContinuousStream(
-        kafkaOffsetReader,
-        kafkaParamsForExecutors(specifiedKafkaParams, uniqueGroupId),
-        options,
-        checkpointLocation,
-        startingStreamOffsets,
-        failOnDataLoss(caseInsensitiveOptions))
+          val kafkaOffsetReader = KafkaOffsetReader.build(
+            strategy(caseInsensitiveOptions),
+            kafkaParamsForDriver(specifiedKafkaParams),
+            caseInsensitiveOptions,
+            driverGroupIdPrefix = s"$uniqueGroupId-driver")
+
+          new KafkaContinuousStream(
+            kafkaOffsetReader,
+            kafkaParamsForExecutors(specifiedKafkaParams, uniqueGroupId),
+            options,
+            checkpointLocation,
+            startingStreamOffsets,
+            failOnDataLoss(caseInsensitiveOptions))
+      }
     }
 
     override def supportedCustomMetrics(): Array[CustomMetric] = {
@@ -558,10 +584,10 @@ private[spark] class DataLossMetric extends CustomSumMetric {
 }
 
 private[kafka010] object KafkaSourceProvider extends Logging {
-  private val ASSIGN = "assign"
-  private val SUBSCRIBE_PATTERN = "subscribepattern"
-  private val SUBSCRIBE = "subscribe"
-  private val STRATEGY_OPTION_KEYS = Set(SUBSCRIBE, SUBSCRIBE_PATTERN, ASSIGN)
+  private[kafka010] val ASSIGN = "assign"
+  private[kafka010] val SUBSCRIBE_PATTERN = "subscribepattern"
+  private[kafka010] val SUBSCRIBE = "subscribe"
+  private[kafka010] val STRATEGY_OPTION_KEYS = Set(SUBSCRIBE, SUBSCRIBE_PATTERN, ASSIGN)
   private[kafka010] val STARTING_OFFSETS_OPTION_KEY = "startingoffsets"
   private[kafka010] val ENDING_OFFSETS_OPTION_KEY = "endingoffsets"
   private[kafka010] val STARTING_OFFSETS_BY_TIMESTAMP_OPTION_KEY = "startingoffsetsbytimestamp"
@@ -790,7 +816,8 @@ private[kafka010] object KafkaSourceProvider extends Logging {
       .build()
   }
 
-  private def convertToSpecifiedParams(parameters: Map[String, String]): Map[String, String] = {
+  private[kafka010] def convertToSpecifiedParams(
+      parameters: Map[String, String]): Map[String, String] = {
     parameters
       .keySet
       .filter(_.toLowerCase(Locale.ROOT).startsWith("kafka."))

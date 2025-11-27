@@ -19,12 +19,11 @@ package org.apache.spark.sql.kafka010.sharegroup
 
 import java.{util => ju}
 
-import scala.jdk.CollectionConverters._
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReaderFactory}
 import org.apache.spark.sql.connector.read.streaming.{MicroBatchStream, Offset, ReadLimit}
-import org.apache.spark.sql.kafka010.sharegroup.ShareGroupKafkaConfig.FailureStrategy
+import org.apache.spark.sql.kafka010.KafkaSourceProvider.INCLUDE_HEADERS
+import org.apache.spark.sql.kafka010.sharegroup.ShareGroupKafkaConfig._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 /**

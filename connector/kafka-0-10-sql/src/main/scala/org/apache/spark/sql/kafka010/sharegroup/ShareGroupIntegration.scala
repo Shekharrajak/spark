@@ -19,10 +19,10 @@ package org.apache.spark.sql.kafka010.sharegroup
 
 import java.{util => ju}
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.connector.read.streaming.{ContinuousStream, MicroBatchStream}
 import org.apache.spark.sql.kafka010.KafkaSourceProvider
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
-import org.apache.spark.internal.Logging
 
 /**
  * Helper to detect and route share group requests.

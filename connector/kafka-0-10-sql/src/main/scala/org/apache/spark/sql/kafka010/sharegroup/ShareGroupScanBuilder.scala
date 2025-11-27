@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+// scalastyle:off line.size.limit
 package org.apache.spark.sql.kafka010.sharegroup
 
 import java.{util => ju}
@@ -26,9 +27,9 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.catalyst.util.CaseInsensitiveMap
+import org.apache.spark.kafka010.KafkaConfigUpdater
 import org.apache.spark.sql.connector.read.streaming.MicroBatchStream
-import org.apache.spark.sql.kafka010.{KafkaConfigUpdater, KafkaSourceProvider}
+import org.apache.spark.sql.kafka010.KafkaSourceProvider
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 /**
@@ -38,7 +39,7 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 private[kafka010] object ShareGroupScanBuilder extends Logging {
 
   def buildMicroBatchStream(options: CaseInsensitiveStringMap): MicroBatchStream = {
-    val caseInsensitiveParams = CaseInsensitiveMap(options.asScala.toMap)
+    val caseInsensitiveParams = options.asScala.toMap
 
     // Validate share group configuration
     ShareGroupKafkaConfig.validateConfig(caseInsensitiveParams)
@@ -113,7 +114,7 @@ private[kafka010] object ShareGroupScanBuilder extends Logging {
       .set(ConsumerConfig.RECEIVE_BUFFER_CONFIG, 65536: java.lang.Integer)
       .build()
 
-    paramsForExecutor.asJava.asInstanceOf[ju.Map[String, Object]]
+    paramsForExecutor
   }
 
   private def kafkaParamsForDriver(
@@ -122,6 +123,6 @@ private[kafka010] object ShareGroupScanBuilder extends Logging {
     val paramsForDriver = KafkaConfigUpdater("driver", specifiedKafkaParams)
       .build()
 
-    paramsForDriver.asJava.asInstanceOf[ju.Map[String, Object]]
+    paramsForDriver
   }
 }

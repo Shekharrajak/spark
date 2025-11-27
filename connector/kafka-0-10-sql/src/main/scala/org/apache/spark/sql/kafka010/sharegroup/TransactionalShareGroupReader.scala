@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+// scalastyle:off line.size.limit nonascii
 package org.apache.spark.sql.kafka010.sharegroup
 
 import java.{util => ju}
@@ -30,12 +31,12 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{InterruptException, TimeoutException, WakeupException}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 
-import org.apache.spark.{SparkEnv, SparkException, TaskContext}
-import org.apache.spark.internal.{Logging, MDC}
+import org.apache.spark.{SparkException, TaskContext}
+import org.apache.spark.internal.Logging
 import org.apache.spark.internal.LogKeys._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow
-import org.apache.spark.sql.connector.read.{InputPartition, PartitionReader, PartitionReaderFactory}
+import org.apache.spark.sql.connector.read.PartitionReader
 import org.apache.spark.sql.kafka010.KafkaRecordToRowConverter
 import org.apache.spark.sql.kafka010.sharegroup.ShareGroupKafkaConfig.FailureStrategy
 import org.apache.spark.util.TaskCompletionListener
@@ -127,7 +128,7 @@ private[kafka010] class TransactionalShareGroupReader(
     try {
       logInfo(log"Initializing transactional share group reader for batch ${MDC(BATCH_ID, batchId)}, " +
         log"task ${MDC(TASK_ATTEMPT_ID, taskId)}, partition ${MDC(PARTITION_ID, partitionId)}, " +
-        log"ack mode: $acknowledgementMode")
+        s"ack mode: $acknowledgementMode")
 
       val props = new Properties()
       executorKafkaParams.asScala.foreach { case (k, v) =>
@@ -158,9 +159,9 @@ private[kafka010] class TransactionalShareGroupReader(
 
       // Validate: lock duration should be >= session timeout
       if (recordLockDurationMs < sessionTimeoutMs) {
-        logWarning(log"Record lock duration ($recordLockDurationMs ms) is less than " +
-          log"session timeout ($sessionTimeoutMs ms). This may cause locks to expire " +
-          log"during processing. Consider increasing lock duration.")
+        logWarning(s"Record lock duration ($recordLockDurationMs ms) is less than " +
+          s"session timeout ($sessionTimeoutMs ms). This may cause locks to expire " +
+          s"during processing. Consider increasing lock duration.")
       }
 
       // Create consumer
@@ -175,8 +176,8 @@ private[kafka010] class TransactionalShareGroupReader(
       })
 
       logInfo(log"Initialized share consumer for task ${MDC(TASK_ATTEMPT_ID, taskId)} " +
-        log"(explicit mode: $isExplicitMode, lock duration: ${recordLockDurationMs}ms, " +
-        log"session timeout: ${sessionTimeoutMs}ms)")
+        s"(explicit mode: $isExplicitMode, lock duration: ${recordLockDurationMs}ms, " +
+        s"session timeout: ${sessionTimeoutMs}ms)")
 
     } catch {
       case NonFatal(e) =>
@@ -238,8 +239,8 @@ private[kafka010] class TransactionalShareGroupReader(
         return false
       }
 
-      logDebug(log"Fetched ${MDC(RECORD_COUNT, records.count())} records in poll #$pollCount " +
-        log"(avg ${totalPollTimeMs / pollCount}ms per poll)")
+      logDebug(s"Fetched ${records.count()} records in poll #$pollCount " +
+        s"(avg ${totalPollTimeMs / pollCount}ms per poll)")
 
       // Setup iterator for new batch
       currentRecords = records.iterator().asScala
@@ -332,7 +333,7 @@ private[kafka010] class TransactionalShareGroupReader(
 
       val totalAcks = acknowledgmentBuffer.asScala.values.map(_.size()).sum
       logInfo(log"Preparing transaction for task ${MDC(TASK_ATTEMPT_ID, taskId)} " +
-        log"with ${totalAcks} acknowledgments across ${acknowledgmentBuffer.size()} partitions")
+        s"with ${totalAcks} acknowledgments across ${acknowledgmentBuffer.size()} partitions")
 
       if (totalAcks == 0) {
         logInfo("No acknowledgments to prepare")
@@ -351,8 +352,8 @@ private[kafka010] class TransactionalShareGroupReader(
             acksSent += 1
           } catch {
             case NonFatal(e) =>
-              logError(log"Failed to acknowledge record at offset ${pending.offset} " +
-                log"in partition $tp", e)
+              logError(s"Failed to acknowledge record at offset ${pending.offset} " +
+                s"in partition $tp", e)
               throw e
           }
         }
@@ -390,7 +391,7 @@ private[kafka010] class TransactionalShareGroupReader(
       transactionState = TaskTransactionState.PREPARED
 
       logInfo(log"Transaction prepared successfully for task ${MDC(TASK_ATTEMPT_ID, taskId)} " +
-        log"(${recordsAcknowledged} acknowledgments)")
+        s"(${recordsAcknowledged} acknowledgments)")
 
     } catch {
       case NonFatal(e) =>
@@ -416,8 +417,8 @@ private[kafka010] class TransactionalShareGroupReader(
       val taskSucceeded = context.isCompleted() && !context.isFailed() && !taskFailed
 
       logInfo(log"Task ${MDC(TASK_ATTEMPT_ID, taskId)} completing. " +
-        log"Success: $taskSucceeded, Records processed: $recordsProcessed, " +
-        log"Transaction state: $transactionState")
+        s"Success: $taskSucceeded, Records processed: $recordsProcessed, " +
+        s"Transaction state: $transactionState")
 
       if (taskSucceeded) {
         // Task succeeded - prepare transaction for commit
@@ -484,8 +485,8 @@ private[kafka010] class TransactionalShareGroupReader(
               consumer.acknowledge(pending.record, ackType)
             } catch {
               case NonFatal(e) =>
-                logWarning(log"Failed to acknowledge record on failure: " +
-                  log"offset=${pending.offset}, partition=$tp", e)
+                logWarning(s"Failed to acknowledge record on failure: " +
+                  s"offset=${pending.offset}, partition=$tp", e)
                 // Continue with other records
             }
           }
@@ -519,12 +520,12 @@ private[kafka010] class TransactionalShareGroupReader(
 
   override def close(): Unit = {
     try {
-      logInfo(log"Closing transactional share group reader. " +
-        log"Records processed: $recordsProcessed, " +
-        log"Records acknowledged: $recordsAcknowledged, " +
-        log"Polls: $pollCount, " +
-        log"Transaction state: $transactionState, " +
-        log"Acknowledgment mode: $acknowledgementMode")
+      logInfo(s"Closing transactional share group reader. " +
+        s"Records processed: $recordsProcessed, " +
+        s"Records acknowledged: $recordsAcknowledged, " +
+        s"Polls: $pollCount, " +
+        s"Transaction state: $transactionState, " +
+        s"Acknowledgment mode: $acknowledgementMode")
 
       cleanup()
 

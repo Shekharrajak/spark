@@ -15,24 +15,23 @@
  * limitations under the License.
  */
 
+// scalastyle:off line.size.limit
 package org.apache.spark.sql.kafka010.sharegroup
 
 import java.{util => ju}
-import java.util.{Collections, Properties}
-import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
+import java.util.Properties
+import java.util.concurrent.ConcurrentHashMap
 
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, Config, DescribeConfigsResult}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
-import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 
-import org.apache.spark.internal.Logging
-import org.apache.spark.internal.MDC
-import org.apache.spark.internal.LogKeys._
 import org.apache.spark.SparkException
+import org.apache.spark.internal.Logging
+import org.apache.spark.internal.LogKeys._
 
 /**
  * Coordinates share group acknowledgments with Spark batch lifecycle.
@@ -87,7 +86,7 @@ private[kafka010] class SparkTransactionCoordinator(
       }
 
       logInfo(log"Initialized SparkTransactionCoordinator for share group " +
-        log"${MDC(GROUP_ID, shareGroupId)} with batch timeout ${batchTimeoutMs}ms")
+        s"${shareGroupId} with batch timeout ${batchTimeoutMs}ms")
 
     } catch {
       case e: Exception =>
@@ -166,7 +165,7 @@ private[kafka010] class SparkTransactionCoordinator(
 
     try {
       logInfo(log"Beginning batch transaction ${MDC(BATCH_ID, batchId)} " +
-        log"for share group ${MDC(GROUP_ID, shareGroupId)}")
+        s"for share group ${shareGroupId}")
 
       val metadata = TransactionMetadata(
         batchId = batchId,
@@ -237,7 +236,7 @@ private[kafka010] class SparkTransactionCoordinator(
       )
       transactionMetadata.put(batchId, prepared)
       logInfo(log"Batch ${MDC(BATCH_ID, batchId)} fully prepared " +
-        log"(all ${updated.taskCount} tasks ready)")
+        s"(all ${updated.taskCount} tasks ready)")
     }
   }
 
@@ -274,7 +273,7 @@ private[kafka010] class SparkTransactionCoordinator(
 
     try {
       logInfo(log"Committing batch transaction ${MDC(BATCH_ID, batchId)} " +
-        log"with ${metadata.taskCount} tasks for share group ${MDC(GROUP_ID, shareGroupId)}")
+        s"with ${metadata.taskCount} tasks for share group ${shareGroupId}")
 
       // Mark as COMMITTING to prevent concurrent operations
       val committing = metadata.copy(state = TransactionState.COMMITTING)
@@ -293,7 +292,7 @@ private[kafka010] class SparkTransactionCoordinator(
       totalBatchesCommitted += 1
 
       logInfo(log"Batch transaction ${MDC(BATCH_ID, batchId)} committed successfully. " +
-        log"Total committed: $totalBatchesCommitted")
+        s"Total committed: $totalBatchesCommitted")
 
     } catch {
       case e: Exception =>
@@ -352,7 +351,7 @@ private[kafka010] class SparkTransactionCoordinator(
 
     try {
       logInfo(log"Aborting batch transaction ${MDC(BATCH_ID, batchId)} " +
-        log"for share group ${MDC(GROUP_ID, shareGroupId)} - reason: $reason")
+        s"for share group ${shareGroupId} - reason: $reason")
 
       val aborted = metadata.copy(
         state = TransactionState.ABORTED,
@@ -366,7 +365,7 @@ private[kafka010] class SparkTransactionCoordinator(
       totalBatchesAborted += 1
 
       logInfo(log"Batch transaction ${MDC(BATCH_ID, batchId)} aborted. " +
-        log"Total aborted: $totalBatchesAborted")
+        s"Total aborted: $totalBatchesAborted")
 
     } catch {
       case e: Exception =>
@@ -401,7 +400,7 @@ private[kafka010] class SparkTransactionCoordinator(
     }
 
     totalRecoveries += 1
-    logInfo(log"Recovering from checkpoint with ${checkpointMetadata.size} transactions")
+    logInfo(log"Recovering from checkpoint with " + s"${checkpointMetadata.size} transactions")
 
     checkpointMetadata.foreach { case (batchId, savedMetadata) =>
       try {
@@ -459,7 +458,7 @@ private[kafka010] class SparkTransactionCoordinator(
     transactionMetadata.asScala.foreach { case (batchId, metadata) =>
       if (!metadata.state.isTerminal && metadata.expiresAtMs < now) {
         logWarning(log"Batch ${MDC(BATCH_ID, batchId)} expired " +
-          log"(created ${now - metadata.createdAtMs}ms ago) - aborting")
+          s"(created ${now - metadata.createdAtMs}ms ago) - aborting")
         abortBatchTransactionInternal(batchId, "Transaction timeout")
       }
     }
@@ -533,7 +532,7 @@ private[kafka010] class SparkTransactionCoordinator(
   override def close(): Unit = synchronized {
     try {
       val stats = getStatistics
-      logInfo(log"Closing SparkTransactionCoordinator. Statistics: $stats")
+      logInfo(s"Closing SparkTransactionCoordinator. Statistics: $stats")
 
       // Abort any active batch
       currentBatchId.foreach { batchId =>

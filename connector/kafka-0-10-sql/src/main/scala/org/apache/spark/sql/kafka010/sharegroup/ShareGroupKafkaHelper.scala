@@ -18,7 +18,7 @@
 package org.apache.spark.sql.kafka010.sharegroup
 
 import java.{util => ju}
-import java.util.{Locale, UUID}
+import java.util.UUID
 
 import scala.jdk.CollectionConverters._
 
@@ -26,7 +26,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.connector.read.streaming.MicroBatchStream
-import org.apache.spark.sql.kafka010.KafkaSourceProvider._
 import org.apache.spark.sql.kafka010.sharegroup.ShareGroupKafkaConfig._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 

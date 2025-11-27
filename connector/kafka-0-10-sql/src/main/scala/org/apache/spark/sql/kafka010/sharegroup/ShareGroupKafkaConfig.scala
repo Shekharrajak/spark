@@ -131,12 +131,16 @@ private[kafka010] object ShareGroupKafkaConfig {
     case object REJECT extends FailureStrategy
     case object ACCEPT_ON_TASK_FAILURE extends FailureStrategy
 
-    def fromString(s: String): FailureStrategy = s.toUpperCase match {
-      case "RELEASE" => RELEASE
-      case "REJECT" => REJECT
-      case "ACCEPT_ON_TASK_FAILURE" => ACCEPT_ON_TASK_FAILURE
-      case _ => throw new IllegalArgumentException(
-        s"Invalid failure strategy: $s. Must be RELEASE, REJECT, or ACCEPT_ON_TASK_FAILURE")
+    def fromString(s: String): FailureStrategy = {
+      // scalastyle:off caselocale
+      s.toUpperCase match {
+        case "RELEASE" => RELEASE
+        case "REJECT" => REJECT
+        case "ACCEPT_ON_TASK_FAILURE" => ACCEPT_ON_TASK_FAILURE
+        case _ => throw new IllegalArgumentException(
+          s"Invalid failure strategy: $s. Must be RELEASE, REJECT, or ACCEPT_ON_TASK_FAILURE")
+      }
+      // scalastyle:on caselocale
     }
   }
 

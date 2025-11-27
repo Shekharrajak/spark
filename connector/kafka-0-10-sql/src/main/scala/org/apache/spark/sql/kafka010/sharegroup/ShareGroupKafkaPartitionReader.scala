@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.kafka010.sharegroup
 
-import java.{time, util => ju}
+import java.{util => ju}
 import java.time.Duration
 import java.util.Properties
 
@@ -25,11 +25,10 @@ import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
 import org.apache.kafka.clients.consumer.{AcknowledgeType, ConsumerRecord, ConsumerRecords, KafkaShareConsumer}
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 
 import org.apache.spark.{SparkException, TaskContext}
-import org.apache.spark.internal.{Logging, MDC}
+import org.apache.spark.internal.Logging
 import org.apache.spark.internal.LogKeys._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow
@@ -61,10 +60,10 @@ private[kafka010] object ShareGroupKafkaReaderFactory extends PartitionReaderFac
     val partitionId = taskCtx.partitionId()
 
     logInfo(log"Creating Kafka Share Group reader for " +
-      log"topics=${MDC(TOPIC_NAME, p.topics.mkString(","))} " +
+      s"topics=${p.topics.mkString(",")} " +
       log"groupId=${MDC(GROUP_ID, p.groupId)} " +
-      log"taskId=${MDC(TASK_ATTEMPT_ID, taskId)} " +
-      log"partitionId=${MDC(PARTITION_ID, partitionId)}")
+      log"taskId=${MDC(TASK_ATTEMPT_ID, taskId.toString)} " +
+      log"partitionId=${MDC(PARTITION_ID, partitionId.toString)}")
 
     new ShareGroupKafkaPartitionReader(
       p.topics,
@@ -149,7 +148,7 @@ private[kafka010] class ShareGroupKafkaPartitionReader(
       consumer.subscribe(topics.asJava)
 
       logInfo(log"Initialized KafkaShareConsumer for group ${MDC(GROUP_ID, groupId)} " +
-        log"topics=${MDC(TOPIC_NAME, topics.mkString(","))}")
+        s"topics=${topics.mkString(",")}")
 
     } catch {
       case NonFatal(e) =>
@@ -185,7 +184,7 @@ private[kafka010] class ShareGroupKafkaPartitionReader(
         return false
       }
 
-      logDebug(log"Fetched ${MDC(RECORD_COUNT, records.count())} records in poll #$pollCount")
+      logDebug(s"Fetched ${records.count()} records in poll #$pollCount")
 
       // Set up iterator for new batch
       currentRecords = records.iterator().asScala
@@ -215,10 +214,10 @@ private[kafka010] class ShareGroupKafkaPartitionReader(
 
   override def close(): Unit = {
     try {
-      logInfo(log"Closing ShareGroupKafkaPartitionReader. " +
-        log"Records processed: ${MDC(RECORD_COUNT, recordsProcessed)}, " +
-        log"Polls: $pollCount, " +
-        log"Ack failures: $acknowledgmentFailures")
+      logInfo(s"Closing ShareGroupKafkaPartitionReader. " +
+        s"Records processed: $recordsProcessed, " +
+        s"Polls: $pollCount, " +
+        s"Ack failures: $acknowledgmentFailures")
 
       // Acknowledge any remaining records
       if (!recordsToAcknowledge.isEmpty) {
@@ -264,7 +263,7 @@ private[kafka010] class ShareGroupKafkaPartitionReader(
 
     val recordCount = recordsToAcknowledge.size()
     var attemptCount = 0
-    var lastException: Exception = null
+    var lastException: Option[Throwable] = None
 
     while (attemptCount < maxAckRetries) {
       try {
@@ -281,8 +280,8 @@ private[kafka010] class ShareGroupKafkaPartitionReader(
         // Check for errors
         val errors = result.asScala.filter(_._2.isPresent)
         if (errors.isEmpty) {
-          logDebug(log"Successfully acknowledged ${MDC(RECORD_COUNT, recordCount)} " +
-            log"records with type ${MDC(ACK_TYPE, ackType)}")
+          logDebug(s"Successfully acknowledged $recordCount " +
+            s"records with type $ackType")
           recordsToAcknowledge.clear()
           return
         } else {
@@ -295,21 +294,21 @@ private[kafka010] class ShareGroupKafkaPartitionReader(
       } catch {
         case NonFatal(e) =>
           attemptCount += 1
-          lastException = e
+          lastException = Some(e)
           acknowledgmentFailures += 1
 
           if (attemptCount < maxAckRetries) {
             val backoffMs = Math.min(100 * attemptCount, 1000)
-            logWarning(log"Acknowledgment attempt $attemptCount failed, " +
-              log"retrying in ${backoffMs}ms", e)
+            logWarning(s"Acknowledgment attempt $attemptCount failed, " +
+              s"retrying in ${backoffMs}ms", e)
             Thread.sleep(backoffMs)
           } else {
-            logError(log"Failed to acknowledge ${MDC(RECORD_COUNT, recordCount)} records " +
-              log"after $maxAckRetries attempts", lastException)
+            logError(s"Failed to acknowledge $recordCount records " +
+              s"after $maxAckRetries attempts", lastException.getOrElse(e))
             // Clear the list to prevent retry on next poll
             recordsToAcknowledge.clear()
             throw new SparkException(
-              s"Failed to acknowledge records after $maxAckRetries attempts", lastException)
+              s"Failed to acknowledge records after $maxAckRetries attempts", lastException.getOrElse(e))
           }
       }
     }
